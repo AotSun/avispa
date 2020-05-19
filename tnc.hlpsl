@@ -1,0 +1,149 @@
+role R (R,S,C:agent, 
+  SND,RCV:channel(dy))
+played_by R
+def=
+local  
+ PEKr,Dauthr,Nr,PEKs,Dauths,Ns:text,  
+ MAr,MAs:text,  
+ QRr,QRs:text, 
+ RAr,RAs:text, 
+ Krs:symmetric_key,  
+ PKr,PKs,PKc:public_key,
+ State:nat 
+const 
+ c_r_ma,c_s_ma,
+ c_r_ra,c_s_ra,
+ s_r_n,r_s_n
+ :protocol_id
+init  
+ State := 1  
+transition  
+1. State=1/\RCV(start) 
+ =|>State':=4/\PEKr':=new()/\Dauthr':=new()/\Nr':=new()
+ /\witness(R,S,r_s_n,Nr')  
+ /\SND({{PEKr'.Dauthr'}_PKc.{Nr'}_PKs}_inv(PKr)) 
+4. State=4/\RCV({{Ns'.{MAs'}_inv(PKc)}_PKr}_inv(PKs)) 
+ =|>State':= 7
+ /\request(R,C,c_r_ma,MAs'))
+ /\request(R,S,s_r_n,Ns'))
+ /\secret(Ns',sect_1,{R,S})
+ /\QRr':=new()
+ /\SND({{QRr'}_PKc}_Krs)
+7.State=7/\RCV({{{RAs'}_inv(PKc)}_PKr}_Krs) 
+ =|>State':=8
+ /\request(R,C,c_r_ra,RAs') 
+end role
+%---------------------------------------------------------------------------------------------------------------
+role S (R,S,C:agent, 
+  SNDR,RCVR,SNDC,RCVC:channel(dy))
+played_by S
+def=
+local  
+ PEKr,Dauthr,Nr,PEKs,Dauths,Ns:text,  
+ MAr,MAs:text,  
+ QRr,QRs:text, 
+ RAr,RAs:text, 
+ Krs:symmetric_key,  
+ PKr,PKs,PKc:public_key,
+ State:nat 
+const 
+ c_r_ma,c_s_ma,
+ c_r_ra,c_s_ra,
+ s_r_n,r_s_n
+ :protocol_id
+init  
+ State := 2  
+transition  
+2. State=2/\RCVR({{PEKr'.Dauthr'}_PKc.{Nr'}_PKs}_inv(PKr)) 
+ =|>State':=5 
+ /\request(S,R,r_s_n,Nr'))
+ /\secret(Nr',sect_2,{S,R})
+ /\PEKs':=new()/\Dauths':=new() 
+ /\SNDC({PEKr'.Dauthr'}_PKc.{PEKs'.Dauths'}_PKc) 
+5. State=5/\RCVC({{MAr'.{{MAs'}_inv(PKc)}_PKr}_PKs}_inv(PKc))  
+ =|>State':=9
+ /\Ns':=new() 
+ /\request(S,C,c_s_ma,MAr')
+ /\witness(S,R,s_r_n,Ns') 
+ /\SNDR({{Ns'.{MAs'}_inv(PKc)}_PKr}_inv(PKs)) 
+9.State=9/\RCVR({{QRr'}_PKc}_Krs)
+ =|>State':= 11
+ /\QRs':=new() 
+ /\SNDC({QRr'}_PKc.{QRs'}_PKc)
+11.State= 11/\RCVC({{RAr'.{{RAs'}_inv(PKc)}_PKr}_PKs}_inv(PKc))
+ =|>State':= 12
+ /\request(S,C,c_s_ra,RAr')
+ /\SNDR({{{RAs'}_inv(PKc)}_PKr}_Krs)
+end role
+%---------------------------------------------------------------------------------------------------------------
+role C (R,S,C:agent, 
+  SND,RCV:channel(dy))
+played_by C
+def=
+local  
+ PEKr,Dauthr,Nr,PEKs,Dauths,Ns:text,  
+ MAr,MAs:text,  
+ QRr,QRs:text, 
+ RAr,RAs:text, 
+ Krs:symmetric_key,  
+ PKr,PKs,PKc:public_key,
+ State:nat 
+const 
+ c_r_ma,c_s_ma,
+ c_r_ra,c_s_ra
+ :protocol_id
+init  
+ State := 3  
+transition  
+3. State=3/\RCV({PEKr'.Dauthr'}_PKc.{PEKs'.Dauths'}_PKc)
+ =|>State':= 6 
+ /\MAr':=new()/\MAs':=new() 
+ /\witness(C,R,c_r_ma,MAs') 
+ /\witness(C,S,c_s_ma,MAr') 
+ /\SND({{MAr'.{{MAs'}_inv(PKc)}_PKr}_PKs}_inv(PKc)) 
+6. State=6/\RCV({QRr'}_PKc.{QRs'}_PKc)
+ =|>State':= 10 
+ /\RAr':=new()/\RAs':=new() 
+ /\witness(C,R,c_r_ra,RAs') 
+ /\witness(C,S,c_s_ra,RAr') 
+ /\SND({{RAr'.{{RAs'}_inv(PKc)}_PKr}_PKs}_inv(PKc))
+end role
+%---------------------------------------------------------------------------------------------------------------
+role session(R,S,C:agent)
+def=
+local 
+S_RS,R_RS,
+S_SC,R_SC,
+S_CS,R_CS:channel (dy)
+composition
+R (R,S,C,S_RS,R_RS)/\ 
+S (R,S,C,S_RS,R_RS,S_SC,R_SC)/\ 
+C (R,S,C,S_CS,R_CS)
+end role
+%---------------------------------------------------------------------------------------------------------------
+role environment()
+def=
+const  
+ c_r_ma,c_s_ma,
+ c_r_ra,c_s_ra,
+ s_r_n,r_s_n
+ sect_1,sect_2
+ :protocol_id,
+ r1,s1,c1:agent,
+intruder_knowledge = {r1,s1,c1}
+composition
+session(r1,s1,c1)/\ 
+session(i,s1,c1)/\ session(r1,i,c1)
+end role
+%---------------------------------------------------------------------------------------------------------------
+goal
+secrecy_of sect_1, sect_2
+authentication_on c_r_ma
+authentication_on c_s_ma
+authentication_on c_r_ra
+authentication_on c_s_ra
+authentication_on s_r_n
+authentication_on r_s_n
+end goal
+%---------------------------------------------------------------------------------------------------------------
+environment()
